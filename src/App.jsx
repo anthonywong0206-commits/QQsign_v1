@@ -1,134 +1,229 @@
-import { useState } from 'react'
-import { Settings, ClipboardCheck, FileText, Home } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import SignaturePad from './components/SignaturePad'
+import {
+  saveRecord,
+  getRecords,
+  clearRecords
+} from './lib/storage'
+
+import {
+  exportPNG,
+  exportPDF
+} from './lib/export'
+
+import {
+  Settings,
+  ClipboardCheck,
+  FileText,
+  Home,
+  Trash2,
+  Download
+} from 'lucide-react'
 
 export default function App() {
   const [page, setPage] = useState('home')
 
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [signature, setSignature] = useState('')
+
+  const [records, setRecords] = useState([])
+
+  useEffect(() => {
+    setRecords(getRecords())
+  }, [])
+
+  const submitCheckIn = () => {
+    if (!name) return
+
+    const record = {
+      id: Date.now(),
+      name,
+      phone,
+      signature,
+      time: new Date().toLocaleString()
+    }
+
+    saveRecord(record)
+
+    setRecords(getRecords())
+
+    setPage('success')
+
+    setName('')
+    setPhone('')
+    setSignature('')
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 pb-24">
       <header className="bg-slate-900 text-white p-5 shadow-lg sticky top-0 z-50">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-xl font-bold">
-            Q
-          </div>
-
-          <div>
-            <h1 className="text-2xl font-bold">QuickSign</h1>
-            <p className="text-sm text-slate-300">
-              快速完成簽收、即場登記及電子簽名。
-            </p>
-          </div>
-        </div>
+        <h1 className="text-2xl font-bold">QuickSign</h1>
+        <p className="text-sm text-slate-300">
+          快速完成簽收、即場登記及電子簽名。
+        </p>
       </header>
 
       <main className="p-4">
         {page === 'home' && (
-          <div className="space-y-4">
-            <div className="bg-white rounded-3xl p-5 shadow-sm">
-              <h2 className="text-xl font-bold mb-4">建立簽收項目</h2>
+          <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4">
+            <h2 className="text-xl font-bold">
+              建立簽收項目
+            </h2>
 
-              <div className="space-y-3">
-                <input
-                  className="w-full border rounded-2xl p-4"
-                  placeholder="活動名稱"
-                />
+            <input
+              className="w-full border rounded-2xl p-4"
+              placeholder="活動名稱"
+            />
 
-                <input
-                  className="w-full border rounded-2xl p-4"
-                  placeholder="活動地點"
-                />
-
-                <input
-                  type="date"
-                  className="w-full border rounded-2xl p-4"
-                />
-
-                <button className="w-full bg-slate-900 text-white rounded-2xl p-4 font-semibold">
-                  啟動簽到模式
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-3xl p-5 shadow-sm">
-              <h3 className="font-bold text-lg mb-3">功能預覽</h3>
-
-              <ul className="space-y-2 text-slate-700">
-                <li>✅ 電子簽名</li>
-                <li>✅ Walk-in 登記</li>
-                <li>✅ PNG 匯出</li>
-                <li>✅ PDF 匯出</li>
-                <li>✅ Mobile-first</li>
-              </ul>
-            </div>
+            <button
+              onClick={() => setPage('checkin')}
+              className="w-full bg-slate-900 text-white rounded-2xl p-4 font-bold"
+            >
+              啟動簽到模式
+            </button>
           </div>
         )}
 
         {page === 'checkin' && (
           <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4">
-            <h2 className="text-xl font-bold">簽到模式</h2>
+            <h2 className="text-xl font-bold">
+              即場登記
+            </h2>
 
             <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               className="w-full border rounded-2xl p-4 text-lg"
-              placeholder="請輸入姓名"
+              placeholder="姓名"
             />
 
             <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
               className="w-full border rounded-2xl p-4 text-lg"
               placeholder="電話"
             />
 
-            <div className="border-2 border-dashed rounded-2xl h-48 flex items-center justify-center text-slate-400">
-              電子簽名區域
-            </div>
+            <SignaturePad
+              onSave={(data) => setSignature(data)}
+            />
 
-            <button className="w-full bg-green-600 text-white rounded-2xl p-5 text-lg font-bold">
+            <button
+              onClick={submitCheckIn}
+              className="w-full bg-green-600 text-white rounded-2xl p-5 text-lg font-bold"
+            >
               確認簽收
             </button>
           </div>
         )}
 
+        {page === 'success' && (
+          <div className="bg-white rounded-3xl p-5 shadow-sm text-center space-y-4">
+            <div className="text-6xl">✅</div>
+
+            <h2 className="text-2xl font-bold">
+              已成功簽收
+            </h2>
+
+            <button
+              onClick={() => setPage('checkin')}
+              className="w-full bg-slate-900 text-white rounded-2xl p-4"
+            >
+              下一位
+            </button>
+          </div>
+        )}
+
         {page === 'records' && (
-          <div className="bg-white rounded-3xl p-5 shadow-sm">
-            <h2 className="text-xl font-bold mb-4">簽收紀錄</h2>
+          <div className="space-y-4">
+            <div
+              id="record-table"
+              className="bg-white rounded-3xl p-5 shadow-sm"
+            >
+              <h2 className="text-xl font-bold mb-4">
+                簽收紀錄
+              </h2>
 
-            <div className="overflow-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2">姓名</th>
-                    <th className="text-left py-2">時間</th>
-                  </tr>
-                </thead>
+              <div className="space-y-3">
+                {records.map((record) => (
+                  <div
+                    key={record.id}
+                    className="border rounded-2xl p-4"
+                  >
+                    <div className="font-bold text-lg">
+                      {record.name}
+                    </div>
 
-                <tbody>
-                  <tr className="border-b">
-                    <td className="py-3">陳大文</td>
-                    <td className="py-3">10:30 AM</td>
-                  </tr>
-                </tbody>
-              </table>
+                    <div className="text-sm text-slate-500">
+                      {record.phone}
+                    </div>
+
+                    <div className="text-xs text-slate-400 mt-1">
+                      {record.time}
+                    </div>
+
+                    {record.signature && (
+                      <img
+                        src={record.signature}
+                        className="mt-3 border rounded-xl bg-white"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() =>
+                  exportPNG('record-table')
+                }
+                className="bg-slate-900 text-white rounded-2xl p-4 flex items-center justify-center gap-2"
+              >
+                <Download size={18} />
+                PNG
+              </button>
+
+              <button
+                onClick={() =>
+                  exportPDF('record-table')
+                }
+                className="bg-red-600 text-white rounded-2xl p-4"
+              >
+                PDF
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                clearRecords()
+                setRecords([])
+              }}
+              className="w-full bg-white border border-red-500 text-red-500 rounded-2xl p-4 flex items-center justify-center gap-2"
+            >
+              <Trash2 size={18} />
+              清空全部紀錄
+            </button>
           </div>
         )}
 
         {page === 'settings' && (
-          <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4">
-            <h2 className="text-xl font-bold">設定</h2>
+          <div className="bg-white rounded-3xl p-5 shadow-sm">
+            <h2 className="text-xl font-bold">
+              設定
+            </h2>
 
-            <input
-              className="w-full border rounded-2xl p-4"
-              placeholder="機構名稱"
-            />
+            <p className="mt-4 text-slate-500">
+              第二批已加入：
+            </p>
 
-            <input
-              className="w-full border rounded-2xl p-4"
-              placeholder="管理密碼"
-              type="password"
-            />
-
-            <button className="w-full bg-slate-900 text-white rounded-2xl p-4">
-              儲存設定
-            </button>
+            <ul className="mt-3 space-y-2 text-sm">
+              <li>✅ 電子簽名</li>
+              <li>✅ localStorage</li>
+              <li>✅ PNG 匯出</li>
+              <li>✅ PDF 匯出</li>
+            </ul>
           </div>
         )}
       </main>
