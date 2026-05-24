@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react'
+
 import SignaturePad from './components/SignaturePad'
-import PasswordModal from './components/PasswordModal'
 import FieldBuilder from './components/FieldBuilder'
+import LogoUploader from './components/LogoUploader'
+import SearchBar from './components/SearchBar'
+import QRCodeCard from './components/QRCodeCard'
+import ActivityManager from './components/ActivityManager'
 
 import {
   saveRecord,
@@ -15,60 +19,93 @@ import {
 } from './lib/export'
 
 import {
+  exportCSV
+} from './lib/csvExport'
+
+import {
+  exportBackup,
+  importBackup
+} from './lib/backup'
+
+import {
   getSettings,
   saveSettings
 } from './lib/settings'
 
 import {
-  Settings,
+  Home,
   ClipboardCheck,
   FileText,
-  Home,
-  Lock,
-  Moon,
-  Sun
+  Settings,
+  QrCode,
+  Download,
+  Share2,
+  Trash2
 } from 'lucide-react'
 
 export default function App() {
-  const [page, setPage] = useState('home')
+  const [page, setPage] =
+    useState('home')
 
-  const [records, setRecords] = useState([])
+  const [records, setRecords] =
+    useState([])
 
-  const [name, setName] = useState('')
+  const [activities, setActivities] =
+    useState(
+      JSON.parse(
+        localStorage.getItem(
+          'quicksign-activities'
+        ) || '[]'
+      )
+    )
 
-  const [signature, setSignature] =
-    useState('')
-
-  const [fields, setFields] = useState([])
-
-  const [fieldValues, setFieldValues] =
-    useState({})
+  const [currentActivity, setCurrentActivity] =
+    useState(null)
 
   const [settings, setSettings] =
     useState(getSettings())
 
-  const [kioskMode, setKioskMode] =
-    useState(false)
+  const [fields, setFields] =
+    useState([])
 
-  const [showPasswordModal, setShowPasswordModal] =
-    useState(false)
+  const [name, setName] =
+    useState('')
+
+  const [signature, setSignature] =
+    useState('')
+
+  const [fieldValues, setFieldValues] =
+    useState({})
+
+  const [keyword, setKeyword] =
+    useState('')
+
+  const [logo, setLogo] = useState(
+    localStorage.getItem('quicksign-logo') ||
+      ''
+  )
 
   useEffect(() => {
     setRecords(getRecords())
   }, [])
 
   useEffect(() => {
-    document.body.className = settings.darkMode
-      ? 'dark bg-slate-900'
-      : 'bg-slate-100'
-  }, [settings.darkMode])
+    localStorage.setItem(
+      'quicksign-activities',
+      JSON.stringify(activities)
+    )
+  }, [activities])
 
   const submitCheckIn = () => {
     const record = {
       id: Date.now(),
+      number: records.length + 1,
+      activity:
+        currentActivity?.name ||
+        '未分類活動',
       name,
-      signature,
       fieldValues,
+      signature,
       time: new Date().toLocaleString()
     }
 
@@ -83,74 +120,55 @@ export default function App() {
     setPage('records')
   }
 
-  const toggleKioskMode = () => {
-    if (!kioskMode) {
-      setKioskMode(true)
-      setPage('checkin')
-    } else {
-      setShowPasswordModal(true)
-    }
-  }
+  const filteredRecords = records.filter(
+    (record) =>
+      record.name
+        ?.toLowerCase()
+        .includes(keyword.toLowerCase())
+  )
 
   return (
-    <div
-      className={`min-h-screen pb-24 ${
-        settings.darkMode
-          ? 'bg-slate-900 text-white'
-          : 'bg-slate-100'
-      }`}
-    >
-      <header
-        className={`p-5 sticky top-0 z-50 shadow-lg ${
-          settings.darkMode
-            ? 'bg-black'
-            : 'bg-slate-900 text-white'
-        }`}
-      >
-        <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-slate-100 pb-24">
+      <header className="bg-slate-900 text-white p-5 shadow-lg sticky top-0 z-50">
+        <div className="flex items-center gap-4">
+          {logo ? (
+            <img
+              src={logo}
+              className="w-14 h-14 rounded-2xl object-cover bg-white"
+            />
+          ) : (
+            <div className="w-14 h-14 rounded-2xl bg-white/10" />
+          )}
+
           <div>
             <h1 className="text-2xl font-bold">
               {settings.organization}
             </h1>
 
-            <p className="text-sm opacity-80">
+            <p className="text-sm text-slate-300">
               QuickSign
             </p>
           </div>
-
-          <button
-            onClick={() => {
-              const updated = {
-                ...settings,
-                darkMode: !settings.darkMode
-              }
-
-              setSettings(updated)
-              saveSettings(updated)
-            }}
-            className="bg-white/10 rounded-xl p-3"
-          >
-            {settings.darkMode ? (
-              <Sun size={20} />
-            ) : (
-              <Moon size={20} />
-            )}
-          </button>
         </div>
       </header>
 
       <main className="p-4 space-y-4">
         {page === 'home' && (
-          <div className="space-y-4">
-            <div
-              className={`rounded-3xl p-5 shadow-sm ${
-                settings.darkMode
-                  ? 'bg-slate-800'
-                  : 'bg-white'
-              }`}
-            >
+          <>
+            <ActivityManager
+              activities={activities}
+              setActivities={setActivities}
+              currentActivity={
+                currentActivity
+              }
+              setCurrentActivity={
+                setCurrentActivity
+              }
+            />
+
+            <div className="bg-white rounded-3xl p-5 shadow-sm">
               <h2 className="text-xl font-bold mb-4">
-                建立簽收項目
+                自訂欄位
               </h2>
 
               <FieldBuilder
@@ -159,28 +177,24 @@ export default function App() {
               />
 
               <button
-                onClick={toggleKioskMode}
-                className="w-full bg-slate-900 text-white rounded-2xl p-4 font-bold mt-5 flex items-center justify-center gap-2"
+                onClick={() =>
+                  setPage('checkin')
+                }
+                className="w-full bg-slate-900 text-white rounded-2xl p-5 font-bold mt-5"
               >
-                <Lock size={20} />
-                {kioskMode
-                  ? '退出簽到模式'
-                  : '啟動簽到模式'}
+                開始簽到
               </button>
             </div>
-          </div>
+
+            <QRCodeCard />
+          </>
         )}
 
         {page === 'checkin' && (
-          <div
-            className={`rounded-3xl p-5 shadow-sm space-y-4 ${
-              settings.darkMode
-                ? 'bg-slate-800'
-                : 'bg-white'
-            }`}
-          >
+          <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4">
             <h2 className="text-2xl font-bold">
-              即場登記
+              {currentActivity?.name ||
+                '即場登記'}
             </h2>
 
             <input
@@ -188,7 +202,7 @@ export default function App() {
               onChange={(e) =>
                 setName(e.target.value)
               }
-              className="w-full border rounded-2xl p-5 text-lg text-black"
+              className="w-full border rounded-2xl p-5 text-lg"
               placeholder="姓名"
             />
 
@@ -197,7 +211,7 @@ export default function App() {
                 key={index}
                 type={field.type}
                 placeholder={field.label}
-                className="w-full border rounded-2xl p-5 text-black"
+                className="w-full border rounded-2xl p-5 text-lg"
                 value={
                   fieldValues[field.label] || ''
                 }
@@ -228,51 +242,48 @@ export default function App() {
 
         {page === 'records' && (
           <div className="space-y-4">
+            <SearchBar
+              keyword={keyword}
+              setKeyword={setKeyword}
+            />
+
             <div
               id="record-table"
-              className={`rounded-3xl p-5 shadow-sm ${
-                settings.darkMode
-                  ? 'bg-slate-800'
-                  : 'bg-white'
-              }`}
+              className="bg-white rounded-3xl p-5 shadow-sm"
             >
               <h2 className="text-xl font-bold mb-4">
                 簽收紀錄
               </h2>
 
               <div className="space-y-4">
-                {records.map((record) => (
-                  <div
-                    key={record.id}
-                    className="border rounded-2xl p-4"
-                  >
-                    <div className="font-bold text-lg">
-                      {record.name}
-                    </div>
-
-                    <div className="text-sm opacity-70">
-                      {record.time}
-                    </div>
-
-                    {Object.entries(
-                      record.fieldValues || {}
-                    ).map(([key, value]) => (
-                      <div
-                        key={key}
-                        className="text-sm mt-1"
-                      >
-                        {key}: {value}
+                {filteredRecords.map(
+                  (record) => (
+                    <div
+                      key={record.id}
+                      className="border rounded-2xl p-4"
+                    >
+                      <div className="font-bold text-lg">
+                        #{record.number}{' '}
+                        {record.name}
                       </div>
-                    ))}
 
-                    {record.signature && (
-                      <img
-                        src={record.signature}
-                        className="mt-3 border rounded-xl bg-white"
-                      />
-                    )}
-                  </div>
-                ))}
+                      <div className="text-sm text-slate-500">
+                        {record.activity}
+                      </div>
+
+                      <div className="text-sm text-slate-400">
+                        {record.time}
+                      </div>
+
+                      {record.signature && (
+                        <img
+                          src={record.signature}
+                          className="mt-4 border rounded-xl"
+                        />
+                      )}
+                    </div>
+                  )
+                )}
               </div>
             </div>
 
@@ -283,7 +294,7 @@ export default function App() {
                 }
                 className="bg-slate-900 text-white rounded-2xl p-4"
               >
-                匯出 PNG
+                PNG
               </button>
 
               <button
@@ -292,7 +303,29 @@ export default function App() {
                 }
                 className="bg-red-600 text-white rounded-2xl p-4"
               >
-                匯出 PDF
+                PDF
+              </button>
+
+              <button
+                onClick={() =>
+                  exportCSV(records)
+                }
+                className="bg-green-600 text-white rounded-2xl p-4"
+              >
+                CSV
+              </button>
+
+              <button
+                onClick={() =>
+                  navigator.share?.({
+                    title: 'QuickSign',
+                    text: 'QuickSign 簽收表'
+                  })
+                }
+                className="bg-blue-600 text-white rounded-2xl p-4 flex items-center justify-center gap-2"
+              >
+                <Share2 size={18} />
+                分享
               </button>
             </div>
 
@@ -301,124 +334,141 @@ export default function App() {
                 clearRecords()
                 setRecords([])
               }}
-              className="w-full border border-red-500 text-red-500 rounded-2xl p-4"
+              className="w-full border border-red-500 text-red-500 rounded-2xl p-4 flex items-center justify-center gap-2"
             >
-              清空全部紀錄
+              <Trash2 size={18} />
+              清除紀錄
             </button>
           </div>
         )}
 
         {page === 'settings' && (
-          <div
-            className={`rounded-3xl p-5 shadow-sm space-y-4 ${
-              settings.darkMode
-                ? 'bg-slate-800'
-                : 'bg-white'
-            }`}
-          >
-            <h2 className="text-xl font-bold">
-              系統設定
-            </h2>
+          <div className="space-y-4">
+            <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4">
+              <h2 className="text-xl font-bold">
+                系統設定
+              </h2>
 
-            <input
-              value={settings.organization}
-              onChange={(e) => {
-                const updated = {
-                  ...settings,
-                  organization:
-                    e.target.value
+              <LogoUploader
+                logo={logo}
+                setLogo={setLogo}
+              />
+
+              <input
+                value={settings.organization}
+                onChange={(e) => {
+                  const updated = {
+                    ...settings,
+                    organization:
+                      e.target.value
+                  }
+
+                  setSettings(updated)
+
+                  saveSettings(updated)
+                }}
+                className="w-full border rounded-2xl p-4"
+                placeholder="機構名稱"
+              />
+
+              <button
+                onClick={() =>
+                  exportBackup({
+                    records,
+                    activities,
+                    settings
+                  })
                 }
+                className="w-full bg-slate-900 text-white rounded-2xl p-4 flex items-center justify-center gap-2"
+              >
+                <Download size={18} />
+                匯出備份
+              </button>
 
-                setSettings(updated)
-                saveSettings(updated)
-              }}
-              className="w-full border rounded-2xl p-4 text-black"
-              placeholder="機構名稱"
-            />
+              <label className="block">
+                <span className="font-semibold">
+                  匯入備份
+                </span>
 
-            <input
-              value={settings.password}
-              onChange={(e) => {
-                const updated = {
-                  ...settings,
-                  password:
-                    e.target.value
-                }
+                <input
+                  type="file"
+                  accept=".json"
+                  className="w-full border rounded-2xl p-3 mt-2"
+                  onChange={(e) => {
+                    const file =
+                      e.target.files[0]
 
-                setSettings(updated)
-                saveSettings(updated)
-              }}
-              className="w-full border rounded-2xl p-4 text-black"
-              placeholder="管理密碼"
-            />
+                    if (!file) return
+
+                    importBackup(
+                      file,
+                      (data) => {
+                        localStorage.setItem(
+                          'quicksign-records',
+                          JSON.stringify(
+                            data.records || []
+                          )
+                        )
+
+                        setRecords(
+                          data.records || []
+                        )
+
+                        setActivities(
+                          data.activities ||
+                            []
+                        )
+                      }
+                    )
+                  }}
+                />
+              </label>
+            </div>
           </div>
         )}
       </main>
 
-      {!kioskMode && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
-          <div className="grid grid-cols-4">
-            <button
-              onClick={() => setPage('home')}
-              className="flex flex-col items-center gap-1 py-3"
-            >
-              <Home size={20} />
-              <span className="text-xs">
-                首頁
-              </span>
-            </button>
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
+        <div className="grid grid-cols-4">
+          <button
+            onClick={() => setPage('home')}
+            className="flex flex-col items-center gap-1 py-3"
+          >
+            <Home size={20} />
+            <span className="text-xs">首頁</span>
+          </button>
 
-            <button
-              onClick={() =>
-                setPage('checkin')
-              }
-              className="flex flex-col items-center gap-1 py-3"
-            >
-              <ClipboardCheck size={20} />
-              <span className="text-xs">
-                簽到
-              </span>
-            </button>
+          <button
+            onClick={() =>
+              setPage('checkin')
+            }
+            className="flex flex-col items-center gap-1 py-3"
+          >
+            <ClipboardCheck size={20} />
+            <span className="text-xs">簽到</span>
+          </button>
 
-            <button
-              onClick={() =>
-                setPage('records')
-              }
-              className="flex flex-col items-center gap-1 py-3"
-            >
-              <FileText size={20} />
-              <span className="text-xs">
-                紀錄
-              </span>
-            </button>
+          <button
+            onClick={() =>
+              setPage('records')
+            }
+            className="flex flex-col items-center gap-1 py-3"
+          >
+            <FileText size={20} />
+            <span className="text-xs">紀錄</span>
+          </button>
 
-            <button
-              onClick={() =>
-                setPage('settings')
-              }
-              className="flex flex-col items-center gap-1 py-3"
-            >
-              <Settings size={20} />
-              <span className="text-xs">
-                設定
-              </span>
-            </button>
-          </div>
-        </nav>
-      )}
-
-      {showPasswordModal && (
-        <PasswordModal
-          correctPassword={settings.password}
-          onClose={() =>
-            setShowPasswordModal(false)
-          }
-          onSuccess={() => {
-            setKioskMode(false)
-            setShowPasswordModal(false)
-          }}
-        />
-      )}
+          <button
+            onClick={() =>
+              setPage('settings')
+            }
+            className="flex flex-col items-center gap-1 py-3"
+          >
+            <Settings size={20} />
+            <span className="text-xs">設定</span>
+          </button>
+        </div>
+      </nav>
     </div>
   )
 }
