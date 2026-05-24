@@ -6,6 +6,9 @@ import LogoUploader from './components/LogoUploader'
 import SearchBar from './components/SearchBar'
 import QRCodeCard from './components/QRCodeCard'
 import ActivityManager from './components/ActivityManager'
+import StatsCard from './components/StatsCard'
+import KioskMode from './components/KioskMode'
+import ImportParticipants from './components/ImportParticipants'
 
 import {
   saveRecord,
@@ -23,8 +26,7 @@ import {
 } from './lib/csvExport'
 
 import {
-  exportBackup,
-  importBackup
+  exportBackup
 } from './lib/backup'
 
 import {
@@ -37,10 +39,9 @@ import {
   ClipboardCheck,
   FileText,
   Settings,
-  QrCode,
   Download,
-  Share2,
-  Trash2
+  Trash2,
+  BarChart3
 } from 'lucide-react'
 
 export default function App() {
@@ -49,6 +50,9 @@ export default function App() {
 
   const [records, setRecords] =
     useState([])
+
+  const [settings, setSettings] =
+    useState(getSettings())
 
   const [activities, setActivities] =
     useState(
@@ -61,9 +65,6 @@ export default function App() {
 
   const [currentActivity, setCurrentActivity] =
     useState(null)
-
-  const [settings, setSettings] =
-    useState(getSettings())
 
   const [fields, setFields] =
     useState([])
@@ -85,16 +86,28 @@ export default function App() {
       ''
   )
 
+  const [participants, setParticipants] =
+    useState([])
+
+  const [kioskEnabled, setKioskEnabled] =
+    useState(false)
+
   useEffect(() => {
     setRecords(getRecords())
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register(
+        '/sw.js'
+      )
+    }
   }, [])
 
   useEffect(() => {
     localStorage.setItem(
-      'quicksign-activities',
-      JSON.stringify(activities)
+      'quicksign-logo',
+      logo
     )
-  }, [activities])
+  }, [logo])
 
   const submitCheckIn = () => {
     const record = {
@@ -128,7 +141,13 @@ export default function App() {
   )
 
   return (
-    <div className="min-h-screen bg-slate-100 pb-24">
+    <div
+      className={`min-h-screen pb-24 ${
+        kioskEnabled
+          ? 'bg-black'
+          : 'bg-slate-100'
+      }`}
+    >
       <header className="bg-slate-900 text-white p-5 shadow-lg sticky top-0 z-50">
         <div className="flex items-center gap-4">
           {logo ? (
@@ -155,6 +174,10 @@ export default function App() {
       <main className="p-4 space-y-4">
         {page === 'home' && (
           <>
+            <StatsCard
+              records={records}
+            />
+
             <ActivityManager
               activities={activities}
               setActivities={setActivities}
@@ -163,6 +186,19 @@ export default function App() {
               }
               setCurrentActivity={
                 setCurrentActivity
+              }
+            />
+
+            <KioskMode
+              enabled={kioskEnabled}
+              setEnabled={
+                setKioskEnabled
+              }
+            />
+
+            <ImportParticipants
+              onImport={
+                setParticipants
               }
             />
 
@@ -191,8 +227,14 @@ export default function App() {
         )}
 
         {page === 'checkin' && (
-          <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4">
-            <h2 className="text-2xl font-bold">
+          <div
+            className={`rounded-3xl p-5 shadow-sm space-y-4 ${
+              kioskEnabled
+                ? 'bg-slate-900 text-white'
+                : 'bg-white'
+            }`}
+          >
+            <h2 className="text-3xl font-bold">
               {currentActivity?.name ||
                 '即場登記'}
             </h2>
@@ -202,7 +244,7 @@ export default function App() {
               onChange={(e) =>
                 setName(e.target.value)
               }
-              className="w-full border rounded-2xl p-5 text-lg"
+              className="w-full border rounded-2xl p-6 text-2xl text-black"
               placeholder="姓名"
             />
 
@@ -211,7 +253,7 @@ export default function App() {
                 key={index}
                 type={field.type}
                 placeholder={field.label}
-                className="w-full border rounded-2xl p-5 text-lg"
+                className="w-full border rounded-2xl p-6 text-2xl text-black"
                 value={
                   fieldValues[field.label] || ''
                 }
@@ -233,7 +275,7 @@ export default function App() {
 
             <button
               onClick={submitCheckIn}
-              className="w-full bg-green-600 text-white rounded-2xl p-5 text-xl font-bold"
+              className="w-full bg-green-600 text-white rounded-2xl p-6 text-2xl font-bold"
             >
               確認簽收
             </button>
@@ -317,15 +359,16 @@ export default function App() {
 
               <button
                 onClick={() =>
-                  navigator.share?.({
-                    title: 'QuickSign',
-                    text: 'QuickSign 簽收表'
+                  exportBackup({
+                    records,
+                    settings,
+                    activities
                   })
                 }
                 className="bg-blue-600 text-white rounded-2xl p-4 flex items-center justify-center gap-2"
               >
-                <Share2 size={18} />
-                分享
+                <Download size={18} />
+                備份
               </button>
             </div>
 
@@ -337,7 +380,7 @@ export default function App() {
               className="w-full border border-red-500 text-red-500 rounded-2xl p-4 flex items-center justify-center gap-2"
             >
               <Trash2 size={18} />
-              清除紀錄
+              清除全部紀錄
             </button>
           </div>
         )}
@@ -370,105 +413,64 @@ export default function App() {
                 className="w-full border rounded-2xl p-4"
                 placeholder="機構名稱"
               />
-
-              <button
-                onClick={() =>
-                  exportBackup({
-                    records,
-                    activities,
-                    settings
-                  })
-                }
-                className="w-full bg-slate-900 text-white rounded-2xl p-4 flex items-center justify-center gap-2"
-              >
-                <Download size={18} />
-                匯出備份
-              </button>
-
-              <label className="block">
-                <span className="font-semibold">
-                  匯入備份
-                </span>
-
-                <input
-                  type="file"
-                  accept=".json"
-                  className="w-full border rounded-2xl p-3 mt-2"
-                  onChange={(e) => {
-                    const file =
-                      e.target.files[0]
-
-                    if (!file) return
-
-                    importBackup(
-                      file,
-                      (data) => {
-                        localStorage.setItem(
-                          'quicksign-records',
-                          JSON.stringify(
-                            data.records || []
-                          )
-                        )
-
-                        setRecords(
-                          data.records || []
-                        )
-
-                        setActivities(
-                          data.activities ||
-                            []
-                        )
-                      }
-                    )
-                  }}
-                />
-              </label>
             </div>
           </div>
         )}
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
-        <div className="grid grid-cols-4">
-          <button
-            onClick={() => setPage('home')}
-            className="flex flex-col items-center gap-1 py-3"
-          >
-            <Home size={20} />
-            <span className="text-xs">首頁</span>
-          </button>
+      {!kioskEnabled && (
+        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
+          <div className="grid grid-cols-4">
+            <button
+              onClick={() =>
+                setPage('home')
+              }
+              className="flex flex-col items-center gap-1 py-3"
+            >
+              <Home size={20} />
+              <span className="text-xs">
+                首頁
+              </span>
+            </button>
 
-          <button
-            onClick={() =>
-              setPage('checkin')
-            }
-            className="flex flex-col items-center gap-1 py-3"
-          >
-            <ClipboardCheck size={20} />
-            <span className="text-xs">簽到</span>
-          </button>
+            <button
+              onClick={() =>
+                setPage('checkin')
+              }
+              className="flex flex-col items-center gap-1 py-3"
+            >
+              <ClipboardCheck size={20} />
+              <span className="text-xs">
+                簽到
+              </span>
+            </button>
 
-          <button
-            onClick={() =>
-              setPage('records')
-            }
-            className="flex flex-col items-center gap-1 py-3"
-          >
-            <FileText size={20} />
-            <span className="text-xs">紀錄</span>
-          </button>
+            <button
+              onClick={() =>
+                setPage('records')
+              }
+              className="flex flex-col items-center gap-1 py-3"
+            >
+              <FileText size={20} />
+              <span className="text-xs">
+                紀錄
+              </span>
+            </button>
 
-          <button
-            onClick={() =>
-              setPage('settings')
-            }
-            className="flex flex-col items-center gap-1 py-3"
-          >
-            <Settings size={20} />
-            <span className="text-xs">設定</span>
-          </button>
-        </div>
-      </nav>
+            <button
+              onClick={() =>
+                setPage('settings')
+              }
+              className="flex flex-col items-center gap-1 py-3"
+            >
+              <Settings size={20} />
+              <span className="text-xs">
+                設定
+              </span>
+            </button>
+          </div>
+        </nav>
+      )}
     </div>
   )
 }
